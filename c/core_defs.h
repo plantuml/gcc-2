@@ -1,0 +1,1 @@
+#define TEAVM_CLASS_NAME_USED 1
