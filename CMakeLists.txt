@@ -10,7 +10,9 @@ project(hello C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
+# -DOPT_FLAGS="-O2 -fno-ipa-pure-const" changes the optimization flags (see the "flags" job)
+set(OPT_FLAGS "-O2" CACHE STRING "Optimization flags")
+set(CMAKE_C_FLAGS_RELEASE "${OPT_FLAGS}")
 add_compile_options(-w)
 
 # The heap of the program: -DHEAP_MB=n gives it n MB (min = max). By default it is the one

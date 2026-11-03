@@ -98,3 +98,88 @@ jobs:
             diff -u "$name.gcc14.txt" "$name.gcc15.txt" | head -400
             echo "::endgroup::"
           done
+
+  # Which optimization of gcc 15 is responsible? Each line adds one flag to -O2; a flag that turns
+  # the failures into successes points to the pass that drops the code after allocateArray().
+  flags:
+    name: gcc 15 with ${{ matrix.flags }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flags:
+          - "-O2"
+          - "-O2 -fno-ipa-pure-const"
+          - "-O2 -fno-ipa-modref"
+          - "-O2 -fno-ipa-ra"
+          - "-O2 -fno-ipa-icf"
+          - "-O2 -fno-ipa-cp"
+          - "-O2 -fno-ipa-sra"
+          - "-O2 -fno-inline"
+          - "-O2 -fno-optimize-sibling-calls"
+          - "-O2 -fno-isolate-erroneous-paths-dereference"
+          - "-O2 -fno-tree-dce"
+          - "-O1"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Build and run, for several sizes of the heap
+        run: |
+          set +e
+          gcc --version | head -1
+          failures=0
+          for mb in default 1 2 4 8 16 32 64; do
+            args=""
+            [ "$mb" != "default" ] && args="-DHEAP_MB=$mb"
+            rm -rf "build-$mb"
+            cmake -S . -B "build-$mb" $args -DOPT_FLAGS="${{ matrix.flags }}" > /dev/null
+            cmake --build "build-$mb" --parallel "$(getconf _NPROCESSORS_ONLN)" > "build-$mb.log" 2>&1 \
+              || { echo "heap $mb: the build failed"; tail -5 "build-$mb.log"; failures=$((failures + 1)); continue; }
+            output="$("build-$mb/bin/hello" 2>&1)"
+            if [ $? -eq 0 ] && [ "$output" = "Hello, world! CRC32 = ebe6c6e6" ]; then
+              echo "heap $mb MB: ok"
+            else
+              echo "heap $mb MB: FAILED: $output"
+              failures=$((failures + 1))
+            fi
+          done
+          echo "| ${{ matrix.flags }} | $failures of 8 failed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "$failures of 8 runs failed"
+
+  # What does gcc 15 conclude about allocateArray()? Its dump of the interprocedural analysis says
+  # whether it believes that the function (or one it calls) never returns.
+  noreturn:
+    name: what gcc 15 infers about allocateArray
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Dump of pure-const
+        run: |
+          set +e
+          gcc --version | head -1
+          mkdir dump && cd dump
+          for f in c/o/t/r/Allocator.c c/o/t/r/GC.c c/o/t/r/ExceptionHandling.c; do
+            gcc -std=gnu11 -O2 -w -c -fdump-ipa-pure-const -fdump-ipa-inline "../c/$f" -o /dev/null -dumpdir ./ 2>&1 | head -5
+          done
+          ls
+          grep -h -B1 -A3 -i "noreturn\|does not return\|looping\|nothrow" *pure-const* | head -300
+          echo "--- teavm_outOfMemory and teavm_gc_allocate:"
+          grep -rn "teavm_outOfMemory\|teavm_gc_allocate" ../c --include=*.h | head
+
+  # The smallest set of files, then of functions, that must be optimized for the failure.
+  bisect:
+    name: bisect (delta debugging)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Find the functions
+        run: |
+          gcc --version | head -1
+          python3 tools/bisect.py 2>&1 | tee bisect.log
+          { echo '```'; tail -150 bisect.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
