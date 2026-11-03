@@ -233,3 +233,32 @@ jobs:
           gcc --version | head -1
           python3 tools/scan_flags.py 2>&1 | tee scan.log
           { echo '```'; cat scan.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  # The suspect: the pass "crc" that GCC 15 added (-foptimize-crc) recognizes the loop that fills a
+  # CRC table. Does a minimal C file show the bug? The check: __builtin_unreachable() in the final tree.
+  repro:
+    name: minimal cases with gcc 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Compile, with and without -foptimize-crc
+        run: |
+          set +e
+          gcc --version | head -1
+          for f in repro/*.c; do
+            for opt in "-O2" "-O2 -fno-optimize-crc" "-O2 -fno-tree-vrp" "-O1"; do
+              rm -rf out; mkdir out
+              gcc -std=gnu11 $opt -c "$f" -o out/x.o -fdump-tree-optimized -dumpdir out/ -w
+              n=$(cat out/*optimized 2>/dev/null | grep -c "__builtin_unreachable")
+              lines=$(objdump -d out/x.o | grep -c "ret")
+              size=$(cat out/*optimized 2>/dev/null | wc -l)
+              echo "$f  [$opt]  lines of the final tree: $size; __builtin_unreachable: $n; ret in the code: $lines"
+              echo "| $f | $opt | $size | $n | $lines |" >> "$GITHUB_STEP_SUMMARY.tmp"
+            done
+          done
+          { echo "| file | options | lines of the final tree | __builtin_unreachable | ret |"; echo "|---|---|---|---|---|"; cat "$GITHUB_STEP_SUMMARY.tmp"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::group::final tree of crc_v1.c with -O2"
+          gcc -std=gnu11 -O2 -c repro/crc_v1.c -o /dev/null -fdump-tree-optimized-blocks -dumpdir ./ -w; cat crc_v1.c.*optimized* 2>/dev/null
+          echo "::endgroup::"
