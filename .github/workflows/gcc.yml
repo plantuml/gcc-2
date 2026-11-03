@@ -262,3 +262,11 @@ jobs:
           echo "::group::final tree of crc_v1.c with -O2"
           gcc -std=gnu11 -O2 -c repro/crc_v1.c -o /dev/null -fdump-tree-optimized-blocks -dumpdir ./ -w; cat crc_v1.c.*optimized* 2>/dev/null
           echo "::endgroup::"
+
+          echo "::group::dump of the pass crc for crc_v3.c (gcc 15)"
+          gcc -std=gnu11 -O2 -c repro/crc_v3.c -o /dev/null -fdump-tree-crc-details -fdump-tree-optimized -dumpdir ./ -w
+          ls *.crc* 2>/dev/null; cat *.crc 2>/dev/null | head -150
+          echo "::endgroup::"
+          echo "::group::final tree of crc_v3.c with -O2"
+          cat crc_v3.c.*optimized 2>/dev/null | tail -60
+          echo "::endgroup::"
