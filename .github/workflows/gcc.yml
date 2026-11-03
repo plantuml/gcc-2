@@ -259,6 +259,8 @@ jobs:
             done
           done
           { echo "| file | options | lines of the final tree | __builtin_unreachable | ret |"; echo "|---|---|---|---|---|"; cat "$GITHUB_STEP_SUMMARY.tmp"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::group::crc_v4 to crc_v6 are included in the loop above"
+          echo "::endgroup::"
           echo "::group::final tree of crc_v1.c with -O2"
           gcc -std=gnu11 -O2 -c repro/crc_v1.c -o /dev/null -fdump-tree-optimized-blocks -dumpdir ./ -w; cat crc_v1.c.*optimized* 2>/dev/null
           echo "::endgroup::"
