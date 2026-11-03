@@ -275,6 +275,8 @@ jobs:
 
           echo "::group::run-time check (PR 127984 and ours)"
           for opt in "-O0" "-O2" "-O2 -fno-optimize-crc" "-O2 -fno-tree-vrp" "-O3"; do
-            gcc -std=gnu11 $opt repro-run/check.c -o check && ./check | sed "s/^/[$opt] /"
+            gcc -std=gnu11 $opt repro-run/check.c -o check
+            out="$(./check 2>&1)"; code=$?
+            echo "[$opt] exit code $code: $out"
           done
           echo "::endgroup::"
