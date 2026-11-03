@@ -74,7 +74,7 @@ class Build:
         obj = os.path.join(self.work, 'o', '%s%s%s%s.o' % (rel.replace('/', '_'), opt, heap or '', tag))
         os.makedirs(os.path.dirname(obj), exist_ok=True)
         src = source or self.source(rel, heap)
-        r = subprocess.run([self.cc, '-std=gnu11', '-w', opt, '-c', src, '-o', obj], capture_output=True, text=True)
+        r = subprocess.run([self.cc, '-std=gnu11', '-w'] + opt.split() + ['-c', src, '-o', obj], capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError('compile %s: %s' % (rel, r.stderr[-500:]))
         self.cache[key] = obj

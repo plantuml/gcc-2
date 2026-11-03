@@ -218,3 +218,18 @@ jobs:
           echo "::group::final tree of the clinit"
           cat dump/*.optimized | awk '/meth_cjj_CRC32__clinit_ \(/{on=1} on' | head -120
           echo "::endgroup::"
+
+  # Which of the options that -O2 adds to -O1 breaks the clinit of CRC32? (-O1 works.)
+  scan:
+    name: scan of the options of -O2
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Turn off the options one by one
+        run: |
+          gcc --version | head -1
+          python3 tools/scan_flags.py 2>&1 | tee scan.log
+          { echo '```'; cat scan.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
