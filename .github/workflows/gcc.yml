@@ -146,6 +146,8 @@ jobs:
           done
           echo "| ${{ matrix.flags }} | $failures of 8 failed |" >> "$GITHUB_STEP_SUMMARY"
           echo "$failures of 8 runs failed"
+          # red when something fails: the result is then visible in the list of jobs
+          [ $failures -eq 0 ]
 
   # What does gcc 15 conclude about allocateArray()? Its dump of the interprocedural analysis says
   # whether it believes that the function (or one it calls) never returns.
@@ -183,3 +185,36 @@ jobs:
           gcc --version | head -1
           python3 tools/bisect.py 2>&1 | tee bisect.log
           { echo '```'; tail -150 bisect.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  # Which pass of gcc 15 removes the code that follows the call to allocateArray() in the clinit of
+  # CRC32? The count of the lines that store the table, pass after pass, shows where it changes.
+  passes:
+    name: gcc 15, pass by pass
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Dumps of the passes, warnings
+        run: |
+          set +e
+          gcc --version | head -1
+          mkdir dump
+          gcc -std=gnu11 -O2 -c c/c/c/j/j/CRC32.c -o dump/crc32.o -fdump-tree-all -fdump-ipa-all \
+              -fdump-rtl-all -dumpdir dump/ \
+              -Wall -Wextra -Warray-bounds=2 -Wstringop-overflow=4 -Wnull-dereference -Wunreachable-code 2>&1 \
+              | grep -v "unused" | head -80
+          echo "::group::passes, in order: lines mentioning the store of the table in the clinit"
+          # number of lines of the function in each dump (a sudden drop = the pass that removed code)
+          for f in $(ls dump | grep -E '\.[0-9]+t\.' | sort -t. -k2 -n); do
+            n=$(awk '/^;; Function /{on=($3 ~ /meth_cjj_CRC32__clinit_/)} on' "dump/$f" | wc -l)
+            echo "$n $f"
+          done | awk '$1 > 0 { if ($1 != prev) print; prev = $1 }'
+          echo "::endgroup::"
+          echo "::group::dump just before and after the first change"
+          ls dump | grep -E '\.[0-9]+[tir]\.' | sort -t. -k2 -n | head -400 > dump/order.txt
+          echo "::endgroup::"
+          echo "::group::final tree of the clinit"
+          cat dump/*.optimized | awk '/meth_cjj_CRC32__clinit_ \(/{on=1} on' | head -120
+          echo "::endgroup::"
